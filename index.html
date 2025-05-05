@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Compliance Task Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css" rel="stylesheet">
+    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-gray-50">
+    <div class="container mx-auto p-4">
+        <!-- Dashboard Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-blue-100 p-4 rounded-lg">
+                <h3 class="text-lg font-semibold">Total Tasks</h3>
+                <p id="totalTasks" class="text-2xl font-bold">0</p>
+            </div>
+            <div class="bg-yellow-100 p-4 rounded-lg">
+                <h3 class="text-lg font-semibold">In Progress</h3>
+                <p id="inProgress" class="text-2xl font-bold">0</p>
+            </div>
+            <div class="bg-green-100 p-4 rounded-lg">
+                <h3 class="text-lg font-semibold">Completed</h3>
+                <p id="completed" class="text-2xl font-bold">0</p>
+            </div>
+            <div class="bg-red-100 p-4 rounded-lg">
+                <h3 class="text-lg font-semibold">On Hold</h3>
+                <p id="onHold" class="text-2xl font-bold">0</p>
+            </div>
+        </div>
+
+        <!-- Task Form -->
+        <div class="bg-white p-6 rounded-lg shadow-md mb-6">
+            <h2 class="text-2xl font-bold mb-4">Add New Task</h2>
+            <form id="taskForm" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Function Name</label>
+                    <select id="function" class="w-full p-2 border rounded" required>
+                        <option value="">Select Function</option>
+                        <option value="Accounts">Accounts</option>
+                        <option value="Banking">Banking</option>
+                        <option value="Procurement">Procurement</option>
+                        <option value="Technical">Technical</option>
+                        <option value="General">General</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Task Title</label>
+                    <input type="text" id="title" class="w-full p-2 border rounded" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Due Date</label>
+                    <input type="date" id="dueDate" class="w-full p-2 border rounded" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Priority</label>
+                    <select id="priority" class="w-full p-2 border rounded" required>
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Status</label>
+                    <select id="status" class="w-full p-2 border rounded" required>
+                        <option value="Not Started">Not Started</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Hold">Hold</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Responsible Person</label>
+                    <select id="responsible" class="w-full p-2 border rounded" required>
+                        <option value="">Select Person</option>
+                        <option value="Bajrang Khandelwal">Bajrang Khandelwal</option>
+                        <option value="Smita Bhagwat">Smita Bhagwat</option>
+                        <option value="Lomesh Lokhande">Lomesh Lokhande</option>
+                        <option value="Pooja">Pooja</option>
+                        <option value="Samir Bhosale">Samir Bhosale</option>
+                    </select>
+                </div>
+                <div class="col-span-full">
+                    <button type="submit" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Submit Task</button>
+                    <button type="button" id="exportBtn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 ml-2">Export to Excel</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Tasks Table -->
+        <div class="bg-white p-6 rounded-lg shadow-md overflow-x-auto">
+            <h2 class="text-2xl font-bold mb-4">Task List</h2>
+            <table class="min-w-full">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Task ID</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Function</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Title</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Due Date</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Priority</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Responsible</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="taskList" class="bg-white divide-y divide-gray-200"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        let tasks = [];
+        let taskCounter = 1;
+
+        // Initialize from MongoDB
+        async function initializeTasks() {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer cU3Bpb1ZjoVRFUrn9lCXbEM8cHm1',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug: 'compliance-tracker-123456',
+                        action: 'read',
+                        collection: 'tasks'
+                    })
+                });
+                const data = await response.json();
+                if (data.success && data.result) {
+                    tasks = data.result;
+                    updateDashboard();
+                    renderTasks();
+                }
+            } catch (error) {
+                console.error('Error fetching tasks:', error);
+            }
+        }
+
+        document.getElementById('taskForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const taskId = `TASK${String(taskCounter).padStart(3, '0')}`;
+            const newTask = {
+                taskId,
+                function: document.getElementById('function').value,
+                title: document.getElementById('title').value,
+                dueDate: document.getElementById('dueDate').value,
+                priority: document.getElementById('priority').value,
+                status: document.getElementById('status').value,
+                responsible: document.getElementById('responsible').value
+            };
+
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer cU3Bpb1ZjoVRFUrn9lCXbEM8cHm1',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug: 'compliance-tracker-123456',
+                        action: 'create',
+                        collection: 'tasks',
+                        data: newTask
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Task added successfully!');
+                    taskCounter++;
+                    await initializeTasks();
+                    e.target.reset();
+                }
+            } catch (error) {
+                alert('Error adding task!');
+                console.error('Error:', error);
+            }
+        });
+
+        function updateDashboard() {
+            document.getElementById('totalTasks').textContent = tasks.length;
+            document.getElementById('inProgress').textContent = tasks.filter(t => t.status === 'In Progress').length;
+            document.getElementById('completed').textContent = tasks.filter(t => t.status === 'Completed').length;
+            document.getElementById('onHold').textContent = tasks.filter(t => t.status === 'Hold').length;
+        }
+
+        async function updateTaskStatus(taskId, newStatus) {
+            try {
+                const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer cU3Bpb1ZjoVRFUrn9lCXbEM8cHm1',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        appSlug: 'compliance-tracker-123456',
+                        action: 'update',
+                        collection: 'tasks',
+                        conditions: { taskId: taskId },
+                        data: { status: newStatus }
+                    })
+                });
+
+                if (response.ok) {
+                    await initializeTasks();
+                }
+            } catch (error) {
+                console.error('Error updating task:', error);
+            }
+        }
+
+        function renderTasks() {
+            const taskList = document.getElementById('taskList');
+            taskList.innerHTML = '';
+            tasks.forEach(task => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap">${task.taskId}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${task.function}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${task.title}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">${task.dueDate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${task.priority === 'High' ? 'bg-red-100 text-red-800' : 
+                            task.priority === 'Medium' ? 'bg-yellow-100 text-yellow-800' : 
+                            'bg-green-100 text-green-800'}">${task.priority}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <select class="status-select border rounded p-1" data-task-id="${task.taskId}">
+                            <option value="Not Started" ${task.status === 'Not Started' ? 'selected' : ''}>Not Started</option>
+                            <option value="In Progress" ${task.status === 'In Progress' ? 'selected' : ''}>In Progress</option>
+                            <option value="Completed" ${task.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                            <option value="Hold" ${task.status === 'Hold' ? 'selected' : ''}>Hold</option>
+                        </select>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">${task.responsible}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <button class="text-red-600 hover:text-red-900" onclick="deleteTask('${task.taskId}')">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                taskList.appendChild(row);
+            });
+
+            // Add event listeners to status selects
+            document.querySelectorAll('.status-select').forEach(select => {
+                select.addEventListener('change', (e) => {
+                    updateTaskStatus(e.target.dataset.taskId, e.target.value);
+                });
+            });
+        }
+
+        async function deleteTask(taskId) {
+            if (confirm('Are you sure you want to delete this task?')) {
+                try {
+                    const response = await fetch('https://r0c8kgwocscg8gsokogwwsw4.zetaverse.one/mongodb', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer cU3Bpb1ZjoVRFUrn9lCXbEM8cHm1',
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            appSlug: 'compliance-tracker-123456',
+                            action: 'delete',
+                            collection: 'tasks',
+                            conditions: { taskId: taskId }
+                        })
+                    });
+
+                    if (response.ok) {
+                        await initializeTasks();
+                    }
+                } catch (error) {
+                    console.error('Error deleting task:', error);
+                }
+            }
+        }
+
+        document.getElementById('exportBtn').addEventListener('click', () => {
+            const wb = XLSX.utils.book_new();
+            const ws = XLSX.utils.json_to_sheet(tasks);
+            XLSX.utils.book_append_sheet(wb, ws, "Tasks");
+            XLSX.writeFile(wb, "compliance_tasks.xlsx");
+        });
+
+        // Initialize the application
+        initializeTasks();
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
